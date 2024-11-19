@@ -747,6 +747,12 @@ static void set_load_weight(struct task_struct *p)
 		return;
 	}
 
+	if (idle_low_policy(p->policy)) {
+    load->weight = scale_load(WEIGHT_LOW_IDLEPRIO);
+    load->inv_weight = WMULT_LOW_IDLEPRIO;
+    return;
+	}
+
 	load->weight = scale_load(sched_prio_to_weight[prio]);
 	load->inv_weight = sched_prio_to_wmult[prio];
 }
@@ -4050,9 +4056,10 @@ recheck:
 		 * Treat SCHED_IDLE as nice 20. Only allow a switch to
 		 * SCHED_NORMAL if the RLIMIT_NICE would normally permit it.
 		 */
-		if (idle_policy(p->policy) && !idle_policy(policy)) {
-			if (!can_nice(p, task_nice(p)))
-				return -EPERM;
+		if ((idle_policy(p->policy) || idle_low_policy(p->policy)) && 
+    		!(idle_policy(policy) || idle_low_policy(policy))) {
+    		if (!can_nice(p, task_nice(p)))
+        		return -EPERM;
 		}
 
 		/* Can't change other user's priorities: */
@@ -5010,22 +5017,24 @@ EXPORT_SYMBOL(io_schedule);
  */
 SYSCALL_DEFINE1(sched_get_priority_max, int, policy)
 {
-	int ret = -EINVAL;
+    int ret = -EINVAL;
 
-	switch (policy) {
-	case SCHED_FIFO:
-	case SCHED_RR:
-		ret = MAX_USER_RT_PRIO-1;
-		break;
-	case SCHED_DEADLINE:
-	case SCHED_NORMAL:
-	case SCHED_BATCH:
-	case SCHED_IDLE:
-		ret = 0;
-		break;
-	}
-	return ret;
+    switch (policy) {
+    case SCHED_FIFO:
+    case SCHED_RR:
+        ret = MAX_USER_RT_PRIO-1;
+        break;
+    case SCHED_DEADLINE:
+    case SCHED_NORMAL:
+    case SCHED_BATCH:
+    case SCHED_IDLE:
+    case SCHED_LOW_IDLE:  // Adicione este caso
+        ret = 0;
+        break;
+    }
+    return ret;
 }
+
 
 /**
  * sys_sched_get_priority_min - return minimum RT priority.
@@ -5037,20 +5046,22 @@ SYSCALL_DEFINE1(sched_get_priority_max, int, policy)
  */
 SYSCALL_DEFINE1(sched_get_priority_min, int, policy)
 {
-	int ret = -EINVAL;
+    int ret = -EINVAL;
 
-	switch (policy) {
-	case SCHED_FIFO:
-	case SCHED_RR:
-		ret = 1;
-		break;
-	case SCHED_DEADLINE:
-	case SCHED_NORMAL:
-	case SCHED_BATCH:
-	case SCHED_IDLE:
-		ret = 0;
-	}
-	return ret;
+    switch (policy) {
+    case SCHED_FIFO:
+    case SCHED_RR:
+        ret = 1;
+        break;
+    case SCHED_DEADLINE:
+    case SCHED_NORMAL:
+    case SCHED_BATCH:
+    case SCHED_IDLE:
+    case SCHED_LOW_IDLE:  // Adicione este caso
+        ret = 0;
+        break;
+    }
+    return ret;
 }
 
 /**

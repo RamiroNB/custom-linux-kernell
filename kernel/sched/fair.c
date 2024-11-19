@@ -6064,26 +6064,29 @@ wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se)
 
 static void set_last_buddy(struct sched_entity *se)
 {
-	if (entity_is_task(se) && unlikely(task_of(se)->policy == SCHED_IDLE))
-		return;
+    if (entity_is_task(se) && unlikely(task_of(se)->policy == SCHED_IDLE || 
+    task_of(se)->policy == SCHED_LOW_IDLE))
+        return;
 
-	for_each_sched_entity(se) {
-		if (SCHED_WARN_ON(!se->on_rq))
-			return;
-		cfs_rq_of(se)->last = se;
-	}
+    for_each_sched_entity(se) {
+        if (SCHED_WARN_ON(!se->on_rq))
+            return;
+        cfs_rq_of(se)->last = se;
+    }
 }
+
 
 static void set_next_buddy(struct sched_entity *se)
 {
-	if (entity_is_task(se) && unlikely(task_of(se)->policy == SCHED_IDLE))
-		return;
+    if (entity_is_task(se) && unlikely(task_of(se)->policy == SCHED_IDLE || 
+    	task_of(se)->policy == SCHED_LOW_IDLE))
+        return;
 
-	for_each_sched_entity(se) {
-		if (SCHED_WARN_ON(!se->on_rq))
-			return;
-		cfs_rq_of(se)->next = se;
-	}
+    for_each_sched_entity(se) {
+        if (SCHED_WARN_ON(!se->on_rq))
+            return;
+        cfs_rq_of(se)->next = se;
+    }
 }
 
 static void set_skip_buddy(struct sched_entity *se)
@@ -6134,8 +6137,12 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 		return;
 
 	/* Idle tasks are by definition preempted by non-idle tasks. */
-	if (unlikely(curr->policy == SCHED_IDLE) &&
-	    likely(p->policy != SCHED_IDLE))
+	if (unlikely(curr->policy == SCHED_IDLE) && 
+		likely(p->policy != SCHED_IDLE && p->policy != SCHED_LOW_IDLE))
+		goto preempt;
+
+	if (unlikely(curr->policy == SCHED_LOW_IDLE) && 
+		likely(p->policy != SCHED_LOW_IDLE))
 		goto preempt;
 
 	/*
@@ -6527,33 +6534,34 @@ struct lb_env {
  */
 static int task_hot(struct task_struct *p, struct lb_env *env)
 {
-	s64 delta;
+    s64 delta;
 
-	lockdep_assert_held(&env->src_rq->lock);
+    lockdep_assert_held(&env->src_rq->lock);
 
-	if (p->sched_class != &fair_sched_class)
-		return 0;
+    if (p->sched_class != &fair_sched_class)
+        return 0;
 
-	if (unlikely(p->policy == SCHED_IDLE))
-		return 0;
+    if (unlikely(p->policy == SCHED_IDLE || p->policy == SCHED_LOW_IDLE))
+        return 0;
 
-	/*
-	 * Buddy candidates are cache hot:
-	 */
-	if (sched_feat(CACHE_HOT_BUDDY) && env->dst_rq->nr_running &&
-			(&p->se == cfs_rq_of(&p->se)->next ||
-			 &p->se == cfs_rq_of(&p->se)->last))
-		return 1;
+    /*
+     * Buddy candidates are cache hot:
+     */
+    if (sched_feat(CACHE_HOT_BUDDY) && env->dst_rq->nr_running &&
+            (&p->se == cfs_rq_of(&p->se)->next ||
+             &p->se == cfs_rq_of(&p->se)->last))
+        return 1;
 
-	if (sysctl_sched_migration_cost == -1)
-		return 1;
-	if (sysctl_sched_migration_cost == 0)
-		return 0;
+    if (sysctl_sched_migration_cost == -1)
+        return 1;
+    if (sysctl_sched_migration_cost == 0)
+        return 0;
 
-	delta = rq_clock_task(env->src_rq) - p->se.exec_start;
+    delta = rq_clock_task(env->src_rq) - p->se.exec_start;
 
-	return delta < (s64)sysctl_sched_migration_cost;
+    return delta < (s64)sysctl_sched_migration_cost;
 }
+
 
 #ifdef CONFIG_NUMA_BALANCING
 /*
